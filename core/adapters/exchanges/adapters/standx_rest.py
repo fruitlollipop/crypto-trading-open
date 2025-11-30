@@ -11,7 +11,7 @@ import aiohttp
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from datetime import datetime
-
+from .. import ExchangeAdapter
 from .standx_base import StandXBase
 from .standx_auth import StandXAuth
 from ..models import (
@@ -39,6 +39,7 @@ class StandXRest(StandXBase):
         """设置HTTP会话"""
         if not self.session:
             self.session = aiohttp.ClientSession(
+                connector=ExchangeAdapter.proxy_connector(),
                 timeout=aiohttp.ClientTimeout(total=30),
                 headers={
                     'User-Agent': 'StandX-Adapter/1.0',
