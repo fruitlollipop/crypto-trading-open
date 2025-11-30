@@ -15,7 +15,8 @@ injector==0.21.0              # 依赖注入容器
 # 🔄 异步和网络 (Async & Networking)
 # ────────────────────────────────────────────────────────────────────────────
 asyncio                       # 异步编程（Python 内置）
-aiohttp==3.9.1                # 异步 HTTP 客户端（稳定版本）
+aiohttp==3.13.2                # 异步 HTTP 客户端（稳定版本）
+aiohttp_socks==0.10.2         # socks代理
 websockets==12.0              # WebSocket 客户端/服务器
 websocket-client==1.6.4       # 同步 WebSocket 客户端（某些库需要）
 

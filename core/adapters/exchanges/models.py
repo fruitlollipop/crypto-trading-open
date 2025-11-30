@@ -45,9 +45,11 @@ class OrderStatus(Enum):
     PENDING = "pending"              # 待处理
     OPEN = "open"                    # 开放/部分成交
     FILLED = "filled"                # 完全成交
+    PARTIALLY_FILLED = "partially_filled"  # 部分成交
     CANCELED = "canceled"            # 已撤销
     REJECTED = "rejected"            # 已拒绝
     EXPIRED = "expired"              # 已过期
+    UNTRIGGERED = "untriggered"      # 未触发
     UNKNOWN = "unknown"              # 未知状态
 
 

@@ -464,4 +464,43 @@ class WebSocketManager(ABC):
             'last_error': self.state.last_error,
             'subscriptions_count': len(self.subscriptions),
             'pending_subscriptions_count': len(self.pending_subscriptions)
-        } 
+        }
+
+
+# class WSTest:
+
+#     def __init__(self, ws_manager: WSSubscriptionManager):
+#         import websocket
+#         self.ws = websocket.WebSocketApp(
+#             f"wss:{host}/ws/query?token={access_token}",
+#             on_reconnect=lambda _ws: logger.debug('[WebSocket] Reconnect to WS server.'),
+#             on_close=lambda ws, code, msg: logging.debug(
+#                 f"[WebSocket] Connection closed with status code: {code}, message: {msg}"),
+#             on_error=lambda ws, err: logger.error(f'[WebSocket] {err}'),
+#             on_pong=lambda ws, data: logger.debug(f"[WebSocket] Receive pong message"),
+#             on_message=self.__on_message
+#         )
+#         threading.Thread(target=self.ws.run_forever, kwargs={'ping_interval': 30, 'ping_timeout': 10, 'reconnect': 5},
+#                          daemon=True).start()
+#         start = time.time()
+#         while not self.ws.sock or not self.ws.sock.sock:
+#             time.sleep(1)
+#             if time.time() - start >= 60:
+#                 msg = (
+#                     f"[WebSocket] Timeout to connect to MO for instance of {decoded_token.get('name').split(':')[0]}. "
+#                     f"Uid is: {decoded_token.get('uid')}.")
+#                 logger.error(msg)
+#                 raise websocket.WebSocketConnectionClosedException(msg)
+
+#     def __on_message(self, ws, message):
+#         msg = json.loads(message)
+#         # logger.debug(f"[WebSocket] Receive message: {msg}")
+#         if msg.get('message_type') == 'query_id':
+#             if not self.ws_msg_queue.empty():
+#                 with self.ws_msg_queue.mutex:
+#                     self.ws_msg_queue.queue.clear()
+#             self.ws_msg_queue.put(msg)
+#         elif msg.get('message_type') == 'query_result':
+#             self.ws_msg_queue.put(msg)
+#         else:
+#             logger.warning(f"[WebSocket] Receive message not recognized.")

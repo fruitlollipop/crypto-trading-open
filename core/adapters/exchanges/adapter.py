@@ -11,7 +11,10 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from decimal import Decimal
 import traceback
-
+import os
+import aiohttp
+from aiohttp_socks import ProxyConnector
+from aiohttp_socks import ChainProxyConnector
 from ...services.events import Event, HealthCheckEvent
 from .interface import ExchangeInterface, ExchangeConfig, ExchangeStatus
 from .models import (
@@ -223,6 +226,30 @@ class ExchangeAdapter(ExchangeInterface):
                 'error': str(e),
                 'exchange_id': self.config.exchange_id
             }
+
+    @staticmethod
+    def proxy_connector(**kwargs) -> ProxyConnector | ChainProxyConnector | None:
+        if os.getenv('server_proxy'):
+            proxy_urls = os.getenv('server_proxy').strip().split(',')
+            if len(proxy_urls) == 1:
+                return ProxyConnector.from_url(
+                    os.getenv(proxy_urls[0].strip()),
+                    limit=100,
+                    limit_per_host=30,
+                    keepalive_timeout=30,
+                    enable_cleanup_closed=True
+                )
+            else:
+                return ChainProxyConnector.from_urls([url.strip() for url in proxy_urls], **kwargs)
+
+    async def test_rest_connection(self, url='https://ipinfo.io'):
+        async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+            async with session.get(url, headers={'Accept': 'application/json'}) as response:
+                if response.status == 200:
+                    res = await response.json()
+                    self.logger.debug(f"Test connection to HTTP server: {url}, response: {res}")
+                else:
+                    self.logger.error(f"HTTP server '{url}' is unavailable, status code: {response.status}, reason: {response.reason}")
 
     # === 错误处理和重试 ===
 
