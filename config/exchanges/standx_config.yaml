@@ -154,6 +154,8 @@ standx:
     method: "hmac_sha256"
     api_key: ""  # 在运行时设置
     api_secret: ""  # 在运行时设置
+    wallet_private_key: ""
+    wallet_address: ""
 
   # 频率限制
   rate_limits:
@@ -233,7 +235,7 @@ standx:
   # 日志配置
   logging:
     level: "INFO"
-    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)d - %(message)s"
 
   # 健康检查配置
   health_check:

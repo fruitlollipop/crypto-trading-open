@@ -15,7 +15,7 @@ import json
 from typing import Dict, List, Optional, Any, Union, Callable
 from decimal import Decimal
 from datetime import datetime
-
+import base58, secrets
 from ..adapter import ExchangeAdapter
 from ..interface import ExchangeConfig
 from ..models import (
@@ -79,7 +79,7 @@ class StandXAdapter(ExchangeAdapter):
                 'subscription_mode': {
                     'mode': 'predefined',
                     'predefined': {
-                        'symbols': ['BTC_USDT_PERP', 'ETH_USDT_PERP', 'SOL_USDT_PERP'],
+                        'symbols': ['BTC_USDT_PERP'],
                         'data_types': {'ticker': True, 'orderbook': True, 'trades': False, 'user_data': False}
                     }
                 }
@@ -162,12 +162,12 @@ class StandXAdapter(ExchangeAdapter):
             await self.websocket.connect()
 
             # 获取支持的交易对
-            await self.websocket.fetch_supported_symbols()
-
-            # 同步支持的交易对到其他模块
-            self.base._supported_symbols = self.websocket._supported_symbols
-            self.base._contract_mappings = self.websocket._contract_mappings
-            self.base._symbol_contract_mappings = self.websocket._symbol_contract_mappings
+            # await self.websocket.fetch_supported_symbols()
+            #
+            # # 同步支持的交易对到其他模块
+            # self.base._supported_symbols = self.websocket._supported_symbols
+            # self.base._contract_mappings = self.websocket._contract_mappings
+            # self.base._symbol_contract_mappings = self.websocket._symbol_contract_mappings
 
             self.logger.info("StandX连接成功")
             return True
@@ -197,6 +197,7 @@ class StandXAdapter(ExchangeAdapter):
         """执行具体的认证逻辑"""
         try:
             # 使用REST模块进行认证
+            await self.rest.auth.authenticate('bsc', self.config.wallet_address, self.config.wallet_private_key)
             return await self.rest.authenticate()
         except Exception as e:
             self.logger.warning(f"StandX认证失败: {str(e)}")
@@ -536,8 +537,7 @@ class StandXAdapter(ExchangeAdapter):
             Dict: 包含 buy_order 和 sell_order 的字典
         """
         import asyncio
-        import uuid
-        from datetime import datetime, timedelta
+        from datetime import datetime
         
         result = {
             'success': False,
@@ -551,8 +551,8 @@ class StandXAdapter(ExchangeAdapter):
             mapped_symbol = self.base._map_symbol(symbol)
             
             # 生成客户端订单ID
-            buy_cl_ord_id = f"buy_{uuid.uuid4().hex[:16]}"
-            sell_cl_ord_id = f"sell_{uuid.uuid4().hex[:16]}"
+            buy_cl_ord_id = base58.b58encode(secrets.token_bytes(26)).decode("utf-8")
+            sell_cl_ord_id = base58.b58encode(secrets.token_bytes(26)).decode("utf-8")
             
             # === 步骤1: 下 buy 订单 ===
             if self.logger:
@@ -565,7 +565,7 @@ class StandXAdapter(ExchangeAdapter):
                     order_type=order_type,
                     quantity=quantity,
                     price=buy_price,
-                    time_in_force="IOC" if order_type == OrderType.MARKET else "GTC",
+                    time_in_force="GTC" if order_type == OrderType.MARKET else "IOC",
                     client_order_id=buy_cl_ord_id
                 )
                 result['buy_order'] = buy_order
@@ -662,7 +662,7 @@ class StandXAdapter(ExchangeAdapter):
                     order_type=order_type,
                     quantity=sell_quantity,
                     price=sell_price,
-                    time_in_force="IOC" if order_type == OrderType.MARKET else "GTC",
+                    time_in_force="GTC" if order_type == OrderType.MARKET else "IOC",
                     client_order_id=sell_cl_ord_id
                 )
                 result['sell_order'] = sell_order
@@ -955,6 +955,14 @@ class StandXAdapter(ExchangeAdapter):
         """获取单个订单信息 - 向后兼容"""
         return await self.get_order_status(symbol, order_id)
 
+    async def connect(self) -> bool:
+        """连接 - 向后兼容"""
+        return await self._do_connect()
+
+    async def disconnect(self) -> None:
+        """断开连接 - 向后兼容"""
+        return await self._do_disconnect()
+
     async def authenticate(self) -> bool:
         """进行身份认证 - 向后兼容"""
         return await self._do_authenticate()
@@ -1016,7 +1024,6 @@ class StandXAdapter(ExchangeAdapter):
         """获取API密钥"""
         return self.rest.api_secret
 
-    @property
     def is_authenticated(self) -> bool:
         """获取认证状态"""
         return self.rest.is_authenticated

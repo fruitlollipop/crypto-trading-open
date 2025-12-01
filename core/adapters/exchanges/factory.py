@@ -56,6 +56,7 @@ class ExchangeFactory:
             from .adapters.binance import BinanceAdapter
             from .adapters.edgex import EdgeXAdapter
             from .adapters.lighter import LighterAdapter
+            from .adapters.standx import StandXAdapter
 
             # 注册Hyperliquid适配器
             self.register_adapter(
@@ -156,6 +157,29 @@ class ExchangeFactory:
                 exchange_type=ExchangeType.PERPETUAL,
                 name="Lighter",
                 description="Lighter永续合约交易所",
+                supported_features=[
+                    "perpetual_trading", "websocket", "orderbook",
+                    "ticker", "trades", "user_data"
+                ],
+                default_config={
+                    "testnet": False,
+                    "default_leverage": 1,
+                    "enable_websocket": True,
+                    "rate_limits": {
+                        "ticker": {"max_requests": 100, "time_window": 60},
+                        "orderbook": {"max_requests": 100, "time_window": 60},
+                        "trading": {"max_requests": 10, "time_window": 60}
+                    }
+                }
+            )
+
+            # 注册StandX适配器
+            self.register_adapter(
+                exchange_id="standx",
+                adapter_class=StandXAdapter,
+                exchange_type=ExchangeType.PERPETUAL,
+                name="StandX",
+                description="StandX永续合约交易所",
                 supported_features=[
                     "perpetual_trading", "websocket", "orderbook",
                     "ticker", "trades", "user_data"

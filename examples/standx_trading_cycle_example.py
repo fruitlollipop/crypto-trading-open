@@ -185,16 +185,7 @@ async def main():
         except Exception as e:
             print(f"❌ 无效的价格价差: {args.price_spread}, 错误: {e}")
             return
-    
-    # 从环境变量读取 API 密钥（优先于配置文件）
-    api_key = os.getenv('STANDX_API_KEY', '')
-    api_secret = os.getenv('STANDX_API_SECRET', '')
-    
-    if api_key:
-        print(f"✅ 从环境变量读取 API Key: {api_key[:8]}...{api_key[-4:] if len(api_key) > 12 else '***'}")
-    if api_secret:
-        print(f"✅ 从环境变量读取 API Secret: {api_secret[:8]}...{api_secret[-4:] if len(api_secret) > 12 else '***'}")
-    
+
     # 加载 StandX 配置
     try:
         import yaml
@@ -214,10 +205,16 @@ async def main():
             api_conf = exchange_conf.get('api', {})
         
         # 如果环境变量没有，则从配置文件读取
-        if not api_key:
-            api_key = auth_conf.get('api_key', '')
-        if not api_secret:
-            api_secret = auth_conf.get('api_secret', '')
+        api_key = os.getenv(f"{'standx'.upper()}_API_KEY")
+        api_secret = os.getenv(f"{'standx'.upper()}_API_SECRET")
+        wallet_address = os.getenv(f"{'standx'.upper()}_WALLET_ADDRESS")
+        wallet_private_key = os.getenv(f"{'standx'.upper()}_WALLET_PRIVATE_KEY")
+        api_key = api_key or auth_conf.get('api_key', '')
+        api_secret = api_secret or auth_conf.get('api_secret', "")
+        wallet_address = wallet_address or auth_conf.get('wallet_address', "")
+        wallet_private_key = wallet_private_key or auth_conf.get('wallet_private_key', "")
+        if not wallet_address or not wallet_private_key:
+            raise ValueError("❌ 缺少钱包地址或钱包私钥")
         
         # 创建交易所配置
         exchange_config = ExchangeConfig(
@@ -226,6 +223,8 @@ async def main():
             exchange_type=ExchangeType.PERPETUAL,
             api_key=api_key,
             api_secret=api_secret,
+            wallet_address=wallet_address,
+            wallet_private_key=wallet_private_key,
             base_url=api_conf.get('base_url', 'https://perps.standx.com'),
             ws_url=api_conf.get('ws_url', 'wss://perps.standx.com/ws-stream/v1'),
             default_leverage=exchange_conf.get('trading', {}).get('default_leverage', 10),
@@ -250,16 +249,30 @@ async def main():
         print(f"❌ 连接失败: {e}")
         return
     
-    # 认证（如果需要）
+    # 认证（必须成功才能继续）
     print("🔧 进行认证...")
+    authenticated = False
     try:
         authenticated = await adapter.authenticate()
         if authenticated:
             print("✅ 认证成功")
         else:
-            print("⚠️  认证失败，但继续执行（某些操作可能需要认证）")
+            print("❌ 认证失败")
+            print("⚠️  认证失败，无法继续执行。请检查：")
+            print("   1. 钱包地址是否正确")
+            print("   2. 钱包私钥是否正确")
+            print("   3. 网络连接是否正常")
+            return
     except Exception as e:
-        print(f"⚠️  认证过程出错: {e}")
+        print(f"❌ 认证过程出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+    
+    # 验证认证状态
+    if not adapter.is_authenticated():
+        print("❌ 认证状态验证失败，无法继续执行")
+        return
     
     try:
         symbol = args.symbol
@@ -276,19 +289,25 @@ async def main():
             print(f"价格价差: {price_spread}")
         print()
         
-        # === 步骤1: 检查账户余额 ===
-        print("🔍 检查账户余额...")
-        balance_ok, balance_error, available_balance = await check_balance(
-            adapter, symbol, quantity, order_type, buy_price
-        )
-        
-        if not balance_ok:
-            print(f"❌ {balance_error}")
-            print(f"   可用余额: {available_balance}")
-            print("\n⚠️  余额不足，无法执行交易。请充值后重试。")
-            return
-        
-        print()
+        # # === 步骤1: 检查账户余额（认证成功后） ===
+        # print("🔍 检查账户余额...")
+        #
+        # # 再次确认认证状态
+        # if not adapter.is_authenticated():
+        #     print("❌ 认证状态已失效，无法查询余额")
+        #     return
+        #
+        # balance_ok, balance_error, available_balance = await check_balance(
+        #     adapter, symbol, quantity, order_type, buy_price
+        # )
+        #
+        # if not balance_ok:
+        #     print(f"❌ {balance_error}")
+        #     print(f"   可用余额: {available_balance}")
+        #     print("\n⚠️  余额不足，无法执行交易。请充值后重试。")
+        #     return
+        #
+        # print()
         
         # === 步骤2: 执行交易周期 ===
         print("🚀 开始执行交易周期...")

@@ -8,6 +8,7 @@ StandX REST API模块
 import time
 import json
 import aiohttp
+import asyncio
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from datetime import datetime
@@ -93,7 +94,7 @@ class StandXRest(StandXBase):
 
         # 请求体签名
         if body_signature and data:
-            payload_str = json.dumps(data, separators=(',', ':'))
+            payload_str = json.dumps(data)
             signature_headers = self.auth.sign_request(payload_str)
             headers.update(signature_headers)
 
@@ -679,7 +680,7 @@ class StandXRest(StandXBase):
 
     async def place_order(self, symbol: str, side: OrderSide, order_type: OrderType, quantity: Decimal,
                           price: Optional[Decimal] = None, time_in_force: str = "GTC",
-                          client_order_id: Optional[str] = None) -> OrderData:
+                          client_order_id: Optional[str] = None) -> OrderData | Dict:
         """下单"""
         try:
             side_str = 'BUY' if side == OrderSide.BUY else 'SELL'
@@ -694,7 +695,10 @@ class StandXRest(StandXBase):
                 time_in_force=time_in_force,
                 client_order_id=client_order_id
             )
-            return self._parse_order(order_data)
+            await asyncio.sleep(1)
+            return self._parse_order(await self.query_order(cl_ord_id=client_order_id))
+            # return self._parse_order(order_data)
+            # return order_data
         except Exception as e:
             if self.logger:
                 self.logger.warning(f"下单失败: {e}")

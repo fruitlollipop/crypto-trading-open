@@ -4,14 +4,18 @@ StandX 认证模块
 实现 StandX API 的 JWT 认证和请求签名功能
 基于官方文档: https://docs.standx.com/standx-api/perps-auth
 """
-
+import os
 import time
 import uuid
+import base58
 import base64
 import json
+import aiohttp
 from typing import Dict, Optional, Any
-from datetime import datetime
-
+from datetime import datetime, timedelta
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from .. import ExchangeAdapter
 try:
     from cryptography.hazmat.primitives.asymmetric import ed25519
     from cryptography.hazmat.backends import default_backend
@@ -65,7 +69,7 @@ class StandXAuth:
             public_key_bytes = self.ed25519_public_key.public_bytes_raw()
             
             # Base58 编码 public key 作为 requestId
-            self.request_id = self._base58_encode(public_key_bytes)
+            self.request_id = base58.b58encode(public_key_bytes).decode('utf-8')
             
         elif NACL_AVAILABLE:
             # 使用 PyNaCl 作为备选
@@ -75,25 +79,11 @@ class StandXAuth:
             
             # Base58 编码 public key
             public_key_bytes = bytes(signing_key.verify_key)
-            self.request_id = self._base58_encode(public_key_bytes)
+            self.request_id = base58.b58encode(public_key_bytes).decode('utf-8')
         else:
             raise ImportError(
                 "需要安装 ed25519 支持库。请运行: pip install cryptography 或 pip install pynacl"
             )
-
-    def _base58_encode(self, data: bytes) -> str:
-        """Base58 编码（简化实现）"""
-        # 注意：这里使用 base64 作为简化实现，实际应该使用 base58
-        # 生产环境应该使用 base58 库
-        try:
-            import base58
-            return base58.b58encode(data).decode('utf-8')
-        except ImportError:
-            # 如果没有 base58 库，使用 base64url 作为临时替代
-            encoded = base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
-            if self.logger:
-                self.logger.warning("使用 base64url 替代 base58，建议安装 base58 库")
-            return encoded
 
     async def prepare_signin(self, chain: str, wallet_address: str) -> str:
         """
@@ -106,7 +96,6 @@ class StandXAuth:
         Returns:
             signedData JWT 字符串
         """
-        import aiohttp
 
         url = f"{self.base_url}/v1/offchain/prepare-signin?chain={chain}"
         data = {
@@ -115,7 +104,7 @@ class StandXAuth:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
                 async with session.post(
                     url,
                     json=data,
@@ -185,7 +174,6 @@ class StandXAuth:
         Returns:
             登录响应，包含 token、address、chain 等信息
         """
-        import aiohttp
 
         url = f"{self.base_url}/v1/offchain/login?chain={chain}"
         data = {
@@ -195,7 +183,7 @@ class StandXAuth:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
                 async with session.post(
                     url,
                     json=data,
@@ -226,7 +214,7 @@ class StandXAuth:
         self,
         chain: str,
         wallet_address: str,
-        sign_message_func: callable
+        wallet_private_key: str
     ) -> Dict[str, Any]:
         """
         完整的认证流程
@@ -234,7 +222,7 @@ class StandXAuth:
         Args:
             chain: 区块链网络 ("bsc" 或 "solana")
             wallet_address: 钱包地址
-            sign_message_func: 签名函数，接受消息字符串，返回签名
+            wallet_private_key: 钱包私钥
 
         Returns:
             登录响应
@@ -250,7 +238,22 @@ class StandXAuth:
             raise ValueError("signedData 中未找到 message 字段")
         
         # 3. 使用钱包签名消息
-        signature = await sign_message_func(message) if callable(sign_message_func) else sign_message_func(message)
+        # 使用 eth_account 库签名消息
+        try:
+            # 从私钥创建账户对象
+            account = Account.from_key(wallet_private_key)
+            # 验证地址匹配
+            if account.address.lower() != wallet_address.lower():
+                raise ValueError(f"钱包地址不匹配: 期望 {wallet_address}, 实际 {account.address}")
+            # 编码消息为以太坊消息格式
+            message_encoded = encode_defunct(text=message)
+            # 签名消息
+            signed_message = account.sign_message(message_encoded)
+            signature = signed_message.signature.to_0x_hex()
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"签名消息失败: {e}")
+            raise
         
         # 4. 登录获取 token
         return await self.login(chain, signature, signed_data)
@@ -332,27 +335,28 @@ class StandXAuth:
             return False
         
         # 检查是否已过期（提前 5 分钟刷新）
-        now = datetime.now()
-        return now < (self.token_expires_at - datetime.fromtimestamp(0).replace(second=300))
+        return self.token_expires_at - datetime.now() > timedelta(minutes=5)
+        # return now < (self.token_expires_at - datetime.fromtimestamp(0).replace(minute=5))
 
-    def get_verification_public_key(self) -> str:
+    async def get_verification_public_key(self) -> str:
         """
         获取 StandX 的验证公钥（用于验证 signedData）
 
         Returns:
             公钥字符串
         """
-        import aiohttp
-        import asyncio
-
         url = f"{self.base_url}/v1/offchain/certs"
-        
+
         try:
-            # 注意：这里使用同步请求，实际应该使用异步
-            # 为了简化，这里返回 URL，实际使用时应该异步获取
-            return url
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+                async with session.get(url) as response:
+                    result = await response.json()
+
+                    if result.get("keys"):
+                        return result.get("keys")[0]
+                    else:
+                        raise Exception(f"获取StandX’s public key失败: {result}")
         except Exception as e:
             if self.logger:
-                self.logger.error(f"获取验证公钥失败: {e}")
+                self.logger.error(f"获取StandX’s public key失败: {e}")
             raise
-
