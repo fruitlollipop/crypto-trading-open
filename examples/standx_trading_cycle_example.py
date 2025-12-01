@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 from decimal import Decimal
 from typing import Optional, Tuple
-
+from eth_account import Account
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -207,14 +207,16 @@ async def main():
         # 如果环境变量没有，则从配置文件读取
         api_key = os.getenv(f"{'standx'.upper()}_API_KEY")
         api_secret = os.getenv(f"{'standx'.upper()}_API_SECRET")
-        wallet_address = os.getenv(f"{'standx'.upper()}_WALLET_ADDRESS")
+        # wallet_address = os.getenv(f"{'standx'.upper()}_WALLET_ADDRESS")
         wallet_private_key = os.getenv(f"{'standx'.upper()}_WALLET_PRIVATE_KEY")
         api_key = api_key or auth_conf.get('api_key', '')
         api_secret = api_secret or auth_conf.get('api_secret', "")
-        wallet_address = wallet_address or auth_conf.get('wallet_address', "")
+        # wallet_address = wallet_address or auth_conf.get('wallet_address', "")
         wallet_private_key = wallet_private_key or auth_conf.get('wallet_private_key', "")
-        if not wallet_address or not wallet_private_key:
+        if not wallet_private_key:
             raise ValueError("❌ 缺少钱包地址或钱包私钥")
+        else:
+            wallet_address = Account.from_key(wallet_private_key).address
         
         # 创建交易所配置
         exchange_config = ExchangeConfig(
