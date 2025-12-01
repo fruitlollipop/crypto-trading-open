@@ -232,13 +232,7 @@ class ExchangeAdapter(ExchangeInterface):
         if os.getenv('server_proxy'):
             proxy_urls = os.getenv('server_proxy').strip().split(',')
             if len(proxy_urls) == 1:
-                return ProxyConnector.from_url(
-                    os.getenv(proxy_urls[0].strip()),
-                    limit=100,
-                    limit_per_host=30,
-                    keepalive_timeout=30,
-                    enable_cleanup_closed=True
-                )
+                return ProxyConnector.from_url(proxy_urls[0].strip())
             else:
                 return ChainProxyConnector.from_urls([url.strip() for url in proxy_urls], **kwargs)
 
