@@ -7,6 +7,7 @@
 
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from decimal import Decimal
@@ -68,8 +69,21 @@ class ExchangeAdapter(ExchangeInterface):
                     datefmt='%H:%M:%S'
                 )
                 handler.setFormatter(formatter)
+                handler.setLevel(logging.INFO)
                 self.logger.addHandler(handler)
-                self.logger.setLevel(logging.INFO)
+                log_file = os.path.join('logs', f"{config.exchange_id}-{os.getenv('ACCOUNT_NAME', 'unknown')}.log")
+                file_handler = RotatingFileHandler(
+                    log_file,
+                    maxBytes=1024 * 1024 * 10,
+                    backupCount=3,
+                    encoding='utf-8'
+                )
+                file_handler.setLevel(logging.DEBUG)
+                file_formatter = logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)d - %(message)s'
+                )
+                file_handler.setFormatter(file_formatter)
+                self.logger.addHandler(file_handler)
                 self.logger.propagate = False
 
         # 连接管理
