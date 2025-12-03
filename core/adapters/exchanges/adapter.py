@@ -242,16 +242,16 @@ class ExchangeAdapter(ExchangeInterface):
             }
 
     @staticmethod
-    def proxy_connector(**kwargs) -> ProxyConnector | ChainProxyConnector | None:
-        if os.getenv('server_proxy'):
-            proxy_urls = os.getenv('server_proxy').strip().split(',')
+    def proxy_connector(config=None, **kwargs) -> ProxyConnector | ChainProxyConnector | None:
+        if os.getenv('server_proxy', config.proxy if isinstance(config, ExchangeConfig) else None):
+            proxy_urls = os.getenv('server_proxy', config.proxy if isinstance(config, ExchangeConfig) else None).strip().split(',')
             if len(proxy_urls) == 1:
                 return ProxyConnector.from_url(proxy_urls[0].strip())
             else:
                 return ChainProxyConnector.from_urls([url.strip() for url in proxy_urls], **kwargs)
 
     async def test_rest_connection(self, url='https://ipinfo.io'):
-        async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+        async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config)) as session:
             async with session.get(url, headers={'Accept': 'application/json'}) as response:
                 if response.status == 200:
                     res = await response.json()

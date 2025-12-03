@@ -57,6 +57,7 @@ class ExchangeConfig:
     testnet: bool = False                   # 是否使用测试网
     base_url: Optional[str] = None          # 自定义API基础URL
     ws_url: Optional[str] = None            # WebSocket URL
+    proxy: Optional[str] = None
 
     # 交易配置
     default_leverage: int = 1               # 默认杠杆倍数

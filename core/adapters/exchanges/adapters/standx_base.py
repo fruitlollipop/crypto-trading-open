@@ -365,9 +365,9 @@ class StandXBase:
             cost=self._safe_decimal(data.get('fill_qty')) * self._safe_decimal(data.get('fill_avg_price')),
             average=self._safe_decimal(data.get('fill_avg_price')),
             status=self._parse_order_status(data.get('status')),
-            timestamp=self._parse_timestamp(self._parse_time(data.get('created_at'))),
-            updated=self._parse_timestamp(self._parse_time(data.get('updated_at'))),
-            fee={},
+            timestamp=datetime.strptime(data.get('created_at'), "%Y-%m-%dT%H:%M:%S.%fZ"),
+            updated=datetime.strptime(data.get('updated_at'), "%Y-%m-%dT%H:%M:%S.%fZ"),
+            fee={"fee": self._safe_decimal(data.get('fee'))},
             trades=[],
             params={},
             raw_data=data

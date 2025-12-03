@@ -50,7 +50,7 @@ class StandXWebSocket(StandXBase):
         self._connection_issue_count = 0
         
         # 初始化认证模块
-        self.auth = StandXAuth(logger=logger)
+        self.auth = StandXAuth(config=config, logger=logger)
 
     async def _check_network_connectivity(self) -> bool:
         """检查网络连通性"""
@@ -59,7 +59,7 @@ class StandXWebSocket(StandXBase):
             test_url = "https://httpbin.org/status/200"  # 简单的测试端点
             timeout = aiohttp.ClientTimeout(total=5)
 
-            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(), timeout=timeout) as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config), timeout=timeout) as session:
                 async with session.get(test_url) as response:
                     return response.status == 200
 
@@ -75,7 +75,7 @@ class StandXWebSocket(StandXBase):
             api_url = "https://perps.standx.com/"  # 正确的StandX官方端点
             timeout = aiohttp.ClientTimeout(total=8)
 
-            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(), timeout=timeout) as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config), timeout=timeout) as session:
                 async with session.get(api_url) as response:
                     # 检查HTTP状态码，2xx和3xx都表示服务器可达
                     return response.status < 500  # 500以下状态码说明服务器可达
@@ -156,7 +156,7 @@ class StandXWebSocket(StandXBase):
         try:
             # 使用aiohttp建立WebSocket连接
             if not hasattr(self, '_session') or (hasattr(self, '_session') and self._session.closed):
-                self._session = aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector())
+                self._session = aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config))
             self._ws_connection = await self._session.ws_connect(self.ws_url)
 
             if self.logger:

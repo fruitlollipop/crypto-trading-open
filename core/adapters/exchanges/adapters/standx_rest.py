@@ -31,7 +31,7 @@ class StandXRest(StandXBase):
         self.is_authenticated = False
         
         # 初始化认证模块
-        self.auth = StandXAuth(logger=logger)
+        self.auth = StandXAuth(config=config, logger=logger)
         
         # JWT token（从认证模块获取）
         self.jwt_token = None
@@ -40,7 +40,7 @@ class StandXRest(StandXBase):
         """设置HTTP会话"""
         if not self.session:
             self.session = aiohttp.ClientSession(
-                connector=ExchangeAdapter.proxy_connector(),
+                connector=ExchangeAdapter.proxy_connector(self.config),
                 timeout=aiohttp.ClientTimeout(total=30),
                 headers={
                     'User-Agent': 'StandX-Adapter/1.0',

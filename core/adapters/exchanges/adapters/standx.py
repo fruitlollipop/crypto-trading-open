@@ -982,6 +982,9 @@ class StandXAdapter(ExchangeAdapter):
         """获取交易对信息 - 向后兼容"""
         return self.symbols_info.get(symbol)
 
+    async def get_points(self):
+        return await self.rest.auth.get_points()
+
     # === 工具方法 ===
 
     def format_quantity(self, symbol: str, quantity: Decimal) -> Decimal:

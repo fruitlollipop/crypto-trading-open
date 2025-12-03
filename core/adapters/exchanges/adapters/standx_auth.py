@@ -34,13 +34,14 @@ except ImportError:
 class StandXAuth:
     """StandX 认证类 - 处理 JWT token 获取和请求签名"""
 
-    def __init__(self, logger=None):
+    def __init__(self, config=None, logger=None):
         """
         初始化认证类
 
         Args:
             logger: 日志记录器
         """
+        self.config = config
         self.logger = logger
         self.base_url = "https://api.standx.com"
         self.perps_base_url = "https://perps.standx.com"
@@ -104,7 +105,7 @@ class StandXAuth:
         }
 
         try:
-            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config)) as session:
                 async with session.post(
                     url,
                     json=data,
@@ -183,7 +184,7 @@ class StandXAuth:
         }
 
         try:
-            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config)) as session:
                 async with session.post(
                     url,
                     json=data,
@@ -348,7 +349,7 @@ class StandXAuth:
         url = f"{self.base_url}/v1/offchain/certs"
 
         try:
-            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector()) as session:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config)) as session:
                 async with session.get(url) as response:
                     result = await response.json()
 
@@ -359,4 +360,26 @@ class StandXAuth:
         except Exception as e:
             if self.logger:
                 self.logger.error(f"获取StandX’s public key失败: {e}")
+            raise
+
+    async def get_points(self) -> dict:
+        """
+        获取 StandX 账号的Points数据
+
+        Returns:
+            公钥字符串
+        """
+        url = f"{self.base_url}/v1/offchain/perps-campaign/points"
+
+        try:
+            async with aiohttp.ClientSession(connector=ExchangeAdapter.proxy_connector(self.config)) as session:
+                async with session.get(url, headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.jwt_token}"}) as response:
+                    if response.status != 200:
+                        self.logger.error(f"获取StandX points失败: {response.status}, {response.reason}")
+                        return {}
+                    else:
+                        return await response.json()
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"获取StandX points失败: {e}")
             raise
