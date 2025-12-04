@@ -8,11 +8,18 @@ StandX 交易周期示例
 import asyncio
 import logging
 import os
+import hashlib
+import base64
+import hmac
+import json
+import requests
+import time
 import argparse
 import re
 import math
 from pathlib import Path
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Optional, Tuple, List, Dict, Any
 from datetime import datetime, timezone
 from eth_account import Account
@@ -166,6 +173,78 @@ def parse_args(name='standx'):
     stats_parser.set_defaults(action='stats', func=get_stats)
     parser.set_defaults()
     return parser.parse_args()
+
+def send_feishu_alert(args):
+    ts = int(time.time())
+    string_to_sign = '{}\n{}'.format(ts, os.getenv('FEISHU_WEBHOOK_SECRET'))
+    hmac_code = hmac.new(string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()
+    sign = base64.b64encode(hmac_code).decode('utf-8')
+    feishu_msg_template = f"""
+{{
+    "timestamp": "{ts}",
+    "sign": "{sign}",
+    "msg_type": "post",
+    "content": {{
+        "post": {{
+            "zh_cn": {{
+                "title": "Standx Alert v1",
+                "content": [
+                    [
+                        {{
+                            "tag": "text",
+                            "text": "编号："
+                        {{,
+                        {{
+                            "tag": "text",
+                            "text": "{args.account_name}"
+                        }}
+                    ],
+                    [
+                        {{
+                            "tag": "text",
+                            "text": "交易所："
+                        }},
+                        {{
+                            "tag": "text",
+                            "text": "StandX"
+                        }}
+                    ],
+                    [
+                        {{
+                            "tag": "text",
+                            "text": "货币代号："
+                        }},
+                        {{
+                            "tag": "text",
+                            "text": "{args.ticker}"
+                        }}
+                    ],
+                    [
+                        {{
+                            "tag": "text",
+                            "text": "告警信息："
+                        }},
+                        {{
+                            "tag": "text",
+                            "text": "有持仓，请确认和处理！"
+                        }}
+                    ],
+                    [
+                        {{
+                            "tag": "at",
+                            "user_id": "all",
+                            "user_name": "所有人"
+                        }}
+                    ]
+                ]
+            }}
+        }}
+    }}
+}}
+    """
+    feishu_body = json.loads(feishu_msg_template)
+    res = requests.post(os.getenv('FEISHU_WEBHOOK_URL'), headers={'Content-Type': 'APPLICATION_JSON_UTF8'}, json=feishu_body)
+    assert res.status_code == 200, f"Send Feishu alert failed: {res.text}"
 
 def parse_arguments():
     """解析命令行参数"""
@@ -544,6 +623,19 @@ def write_orders_to_excel(orders: List[OrderData], excel_path: str, account_name
         df_orders_detail = pd.DataFrame(orders_data)
         # 按创建时间排序（最新的在前）
         df_orders_detail = df_orders_detail.sort_values('创建时间', ascending=False)
+
+        symbol_stats = df_orders_detail.groupby('交易对').agg({
+            '订单ID': 'count',
+        }).reset_index()
+        symbol_stats.columns = ['交易对', '订单数量']
+        
+        # 检查每个交易对的订单数量是否为偶数
+        odd_count_symbols = symbol_stats[symbol_stats['订单数量'] % 2 != 0]
+        if not odd_count_symbols.empty:
+            logger.warning("⚠️  以下交易对的订单数量不是偶数（可能存在未平仓订单）：")
+            for _, row in odd_count_symbols.iterrows():
+                logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
+                send_feishu_alert(SimpleNamespace(account_name=account_name, tiker=row['交易对']))
         
         # 按日期分组，汇总每天的订单数据（统计数据）
         # 需要从创建时间中提取日期部分进行分组
@@ -752,7 +844,41 @@ def write_points_to_excel(points_data: Dict[str, Any], excel_path: str, account_
                 account_exists = df_existing_points['账号名称'].astype(str) == account_name
                 if account_exists.any():
                     # 更新该账号的记录
-                    df_existing_points.loc[account_exists, :] = df_new.iloc[0]
+                    # 确保 df_new 的列顺序与 df_existing_points 一致
+                    df_new_aligned = df_new.reindex(columns=df_existing_points.columns, fill_value='')
+                    # 确保数据类型匹配：将 df_new_aligned 的每列转换为与 df_existing_points 相同的类型
+                    for col in df_existing_points.columns:
+                        if col in df_new_aligned.columns:
+                            # 尝试将新数据的列转换为现有列的数据类型
+                            try:
+                                if df_existing_points[col].dtype != 'object':
+                                    # 对于数值类型，使用 pd.to_numeric 转换
+                                    df_new_aligned[col] = pd.to_numeric(df_new_aligned[col], errors='coerce')
+                                    # 如果是整数类型，转换为整数
+                                    if pd.api.types.is_integer_dtype(df_existing_points[col]):
+                                        df_new_aligned[col] = df_new_aligned[col].astype('Int64')  # 使用可空整数类型
+                                    else:
+                                        # 保持与现有列相同的数据类型
+                                        df_new_aligned[col] = df_new_aligned[col].astype(df_existing_points[col].dtype)
+                                else:
+                                    # 对于对象类型，转换为字符串
+                                    df_new_aligned[col] = df_new_aligned[col].astype(str)
+                            except (ValueError, TypeError):
+                                # 如果转换失败，保持原类型
+                                pass
+                    # 现在可以安全地赋值了
+                    # 如果匹配多行，删除所有匹配的行，然后添加新的一行（通常一个账号应该只有一行）
+                    matching_indices = df_existing_points.index[account_exists]
+                    if len(matching_indices) > 0:
+                        # 如果有多行匹配，先删除所有匹配的行
+                        if len(matching_indices) > 1:
+                            df_existing_points = df_existing_points.drop(matching_indices)
+                            logger.info(f"⚠️  发现 {len(matching_indices)} 行匹配账号 {account_name}，已删除所有重复行")
+                        else:
+                            # 只有一行匹配，删除它
+                            df_existing_points = df_existing_points.drop(matching_indices[0])
+                        # 添加新的一行数据
+                        df_existing_points = pd.concat([df_existing_points, df_new_aligned], ignore_index=True)
                     df_points = df_existing_points
                     logger.info(f"✅ 已更新账号 {account_name} 的积分数据")
                 else:
