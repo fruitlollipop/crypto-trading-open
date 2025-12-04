@@ -174,7 +174,7 @@ def parse_args(name='standx'):
     parser.set_defaults()
     return parser.parse_args()
 
-def send_feishu_alert(args):
+def send_feishu_alert(args, logger: logging.Logger):
     ts = int(time.time())
     string_to_sign = '{}\n{}'.format(ts, os.getenv('FEISHU_WEBHOOK_SECRET'))
     hmac_code = hmac.new(string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()
@@ -245,7 +245,7 @@ def send_feishu_alert(args):
     feishu_body = json.loads(feishu_msg_template)
     res = requests.post(os.getenv('FEISHU_WEBHOOK_URL'), headers={'Content-Type': 'APPLICATION_JSON_UTF8'}, json=feishu_body)
     if res.status_code != 200:
-        print(f"Send Feishu alert failed: {res.text}")
+        logger.error(f"Send Feishu alert failed: {res.text}")
 
 def parse_arguments():
     """解析命令行参数"""
@@ -636,7 +636,7 @@ def write_orders_to_excel(orders: List[OrderData], excel_path: str, account_name
             logger.warning("⚠️  以下交易对的订单数量不是偶数（可能存在未平仓订单）：")
             for _, row in odd_count_symbols.iterrows():
                 logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
-                send_feishu_alert(SimpleNamespace(account_name=account_name, tiker=row['交易对']))
+                send_feishu_alert(SimpleNamespace(account_name=account_name, tiker=row['交易对']), logger)
         
         # 按日期分组，汇总每天的订单数据（统计数据）
         # 需要从创建时间中提取日期部分进行分组
