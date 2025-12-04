@@ -193,7 +193,7 @@ def send_feishu_alert(args, logger: logging.Logger):
                         {{
                             "tag": "text",
                             "text": "编号："
-                        {{,
+                        }},
                         {{
                             "tag": "text",
                             "text": "{args.account_name}"
@@ -1129,7 +1129,7 @@ async def init_exchange(logger: logging.Logger, wallet_private_key=None, proxy=N
 
 if __name__ == "__main__":
     parser_args = parse_args()
-    _logger = init_logging(f"standx-{os.getenv('ACCOUNT_NAME', 'unknown')}")
+    _logger = init_logging(f"standx-{os.getenv('ACCOUNT_NAME', 'stats')}")
     try:
         asyncio.run(parser_args.func(_logger, parser_args))
     except KeyboardInterrupt:
