@@ -64,10 +64,22 @@ class ExchangeAdapter(ExchangeInterface):
             if not self.logger.handlers:
                 # 添加控制台处理器和格式化器
                 handler = logging.StreamHandler()
-                formatter = logging.Formatter(
-                    '[%(asctime)s] %(levelname)-8s %(name)-20s | %(message)s',
-                    datefmt='%H:%M:%S'
+                import colorlog
+                formatter = colorlog.ColoredFormatter(
+                    '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d:%(funcName)s] - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    log_colors={
+                        'DEBUG': 'white',
+                        'INFO': 'green',
+                        'WARNING': 'yellow',
+                        'ERROR': 'red',
+                        'CRITICAL': 'bold_red'
+                    }
                 )
+                # formatter = logging.Formatter(
+                #     '[%(asctime)s] %(levelname)-8s %(name)-20s | %(message)s',
+                #     datefmt='%H:%M:%S'
+                # )
                 handler.setFormatter(formatter)
                 handler.setLevel(logging.INFO)
                 self.logger.addHandler(handler)
@@ -80,7 +92,8 @@ class ExchangeAdapter(ExchangeInterface):
                 )
                 file_handler.setLevel(logging.DEBUG)
                 file_formatter = logging.Formatter(
-                    '%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)d - %(message)s'
+                    '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d:%(funcName)s] - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
                 )
                 file_handler.setFormatter(file_formatter)
                 self.logger.addHandler(file_handler)
