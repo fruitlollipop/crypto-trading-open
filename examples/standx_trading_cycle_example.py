@@ -244,7 +244,8 @@ def send_feishu_alert(args):
     """
     feishu_body = json.loads(feishu_msg_template)
     res = requests.post(os.getenv('FEISHU_WEBHOOK_URL'), headers={'Content-Type': 'APPLICATION_JSON_UTF8'}, json=feishu_body)
-    assert res.status_code == 200, f"Send Feishu alert failed: {res.text}"
+    if res.status_code != 200:
+        print(f"Send Feishu alert failed: {res.text}")
 
 def parse_arguments():
     """解析命令行参数"""
