@@ -636,7 +636,7 @@ def write_orders_to_excel(orders: List[OrderData], excel_path: str, account_name
             logger.warning("⚠️  以下交易对的订单数量不是偶数（可能存在未平仓订单）：")
             for _, row in odd_count_symbols.iterrows():
                 logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
-                send_feishu_alert(SimpleNamespace(account_name=account_name, tiker=row['交易对']), logger)
+                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=row['交易对']), logger)
         
         # 按日期分组，汇总每天的订单数据（统计数据）
         # 需要从创建时间中提取日期部分进行分组
