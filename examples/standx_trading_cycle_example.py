@@ -226,7 +226,7 @@ def send_feishu_alert(args, logger: logging.Logger):
                         }},
                         {{
                             "tag": "text",
-                            "text": "有持仓，请确认和处理！"
+                            "text": "{args.msg}"
                         }}
                     ],
                     [
@@ -625,18 +625,31 @@ def write_orders_to_excel(orders: List[OrderData], excel_path: str, account_name
         # 按创建时间排序（最新的在前）
         df_orders_detail = df_orders_detail.sort_values('创建时间', ascending=False)
 
-        symbol_stats = df_orders_detail.groupby('交易对').agg({
+        # 先按照日期过滤当前日期的orders
+        current_date = datetime.now(timezone.utc).date().strftime('%Y-%m-%d')
+        df_today_orders = df_orders_detail[df_orders_detail['日期'] == current_date]
+        
+        # 再按照交易对进行分组统计
+        symbol_stats = df_today_orders.groupby('交易对').agg({
             '订单ID': 'count',
         }).reset_index()
         symbol_stats.columns = ['交易对', '订单数量']
         
+        # 检查是否有交易对当天的订单数量为0
+        zero_count_symbols = symbol_stats[symbol_stats['订单数量'] == 0]
+        if not zero_count_symbols.empty:
+            logger.warning("⚠️  以下交易对当天的订单数量为0：")
+            for _, row in zero_count_symbols.iterrows():
+                logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
+                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=row['交易对'], msg='当天没有交易记录'), logger)
+       
         # 检查每个交易对的订单数量是否为偶数
         odd_count_symbols = symbol_stats[symbol_stats['订单数量'] % 2 != 0]
         if not odd_count_symbols.empty:
             logger.warning("⚠️  以下交易对的订单数量不是偶数（可能存在未平仓订单）：")
             for _, row in odd_count_symbols.iterrows():
                 logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
-                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=row['交易对']), logger)
+                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=row['交易对'], msg='有持仓，请确认和处理！'), logger)
         
         # 按日期分组，汇总每天的订单数据（统计数据）
         # 需要从创建时间中提取日期部分进行分组
@@ -950,7 +963,7 @@ async def get_stats(logger: logging.Logger, args: argparse.Namespace):
         return
 
     for config in configs:
-        logger.info(f"\n处理配置文件: {config['file_name']}")
+        logger.info(f"处理配置文件: {config['file_name']}")
         wallet_private_key = config['content'].get('environment', {}).get('STANDX_WALLET_PRIVATE_KEY')
         server_proxy = config['content'].get('environment', {}).get('server_proxy')
         if not wallet_private_key:
@@ -980,7 +993,7 @@ async def get_stats(logger: logging.Logger, args: argparse.Namespace):
 
         try:
             # === 步骤3: 获取订单历史 ===
-            logger.info("\n📊 获取订单历史...")
+            logger.info("📊 获取订单历史...")
             orders = await adapter.get_order_history()
             logger.info(f"✅ 获取到 {len(orders)} 条订单记录")
 
@@ -994,13 +1007,13 @@ async def get_stats(logger: logging.Logger, args: argparse.Namespace):
                 logger.info(f"   总交易量: {total_volume}")
                 
                 # === 写入订单数据到 Excel ===
-                logger.info("\n💾 写入订单数据到 Excel...")
+                logger.info("💾 写入订单数据到 Excel...")
                 write_orders_to_excel(orders, excel_path, account_name, logger)
             else:
                 logger.warning("   没有订单数据")
 
             # === 步骤4: 获取账号积分 ===
-            logger.info("\n🎁 获取账号积分...")
+            logger.info("🎁 获取账号积分...")
             points_data = None
             try:
                 # 通过适配器获取积分
@@ -1017,10 +1030,10 @@ async def get_stats(logger: logging.Logger, args: argparse.Namespace):
             
             # === 写入积分数据到 Excel ===
             if points_data:
-                logger.info("\n💾 写入积分数据到 Excel...")
+                logger.info("💾 写入积分数据到 Excel...")
                 write_points_to_excel(points_data, excel_path, account_name, logger)
 
-            logger.info("\n✅ 数据统计完成")
+            logger.info("✅ 数据统计完成")
 
         except Exception as e:
             logger.error(f"❌ 执行出错: {e}")
@@ -1133,8 +1146,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(parser_args.func(_logger, parser_args))
     except KeyboardInterrupt:
-        print("\n程序被用户中断")
+        _logger.warning("程序被用户中断")
     except Exception as e:
-        print(f"程序异常退出: {e}")
+        _logger.error(f"程序异常退出: {e}")
         import traceback
         traceback.print_exc()
