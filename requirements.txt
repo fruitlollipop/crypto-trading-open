@@ -34,7 +34,7 @@ hyperliquid-python-sdk        # Hyperliquid 官方 Python SDK
 httpx==0.25.2                 # HTTP 客户端（Hyperliquid 原生实现需要）
 
 # Hyperliquid/Lighter 签名依赖
-eth-account==0.10.0           # 以太坊账户管理和签名
+eth-account==0.13.7           # 以太坊账户管理和签名
 eth-typing==3.5.2             # 以太坊类型定义
 eth-utils==2.3.1              # 以太坊工具函数
 

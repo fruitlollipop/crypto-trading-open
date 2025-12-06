@@ -39,7 +39,7 @@ def init_logging(keyword):
     formatters:
       basic:
         datefmt: '%Y-%m-%d %H:%M:%S'
-        format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d:%(funcName)s] - %(message)s'
+        format: '%(asctime)s - %(name)s - %(levelname)-8s - [%(filename)s:%(lineno)05d:%(funcName)s] - %(message)s'
       colored:
         (): colorlog.ColoredFormatter
         log_colors:
@@ -636,12 +636,17 @@ def write_orders_to_excel(orders: List[OrderData], excel_path: str, account_name
         symbol_stats.columns = ['交易对', '订单数量']
         
         # 检查是否有交易对当天的订单数量为0
-        zero_count_symbols = symbol_stats[symbol_stats['订单数量'] == 0]
-        if not zero_count_symbols.empty:
-            logger.warning("⚠️  以下交易对当天的订单数量为0：")
-            for _, row in zero_count_symbols.iterrows():
-                logger.warning(f"   交易对: {row['交易对']}, 订单数量: {row['订单数量']}")
-                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=row['交易对'], msg='当天没有交易记录'), logger)
+        # 获取所有历史交易对列表
+        all_symbols = set(df_orders_detail['交易对'].unique())
+        # 获取当天有订单的交易对列表
+        today_symbols = set(symbol_stats['交易对'].unique()) if not symbol_stats.empty else set()
+        # 找出在历史上有订单但当天没有订单的交易对
+        zero_count_symbols = all_symbols - today_symbols
+        if zero_count_symbols:
+            logger.warning("⚠️  以下交易对在历史上有订单，但当天订单数量为0：")
+            for symbol in sorted(zero_count_symbols):
+                logger.warning(f"   交易对: {symbol}, 当天订单数量: 0")
+                send_feishu_alert(SimpleNamespace(account_name=account_name, ticker=symbol, msg='当天没有交易记录'), logger)
        
         # 检查每个交易对的订单数量是否为偶数
         odd_count_symbols = symbol_stats[symbol_stats['订单数量'] % 2 != 0]
