@@ -695,7 +695,7 @@ class StandXRest(StandXBase):
                 time_in_force=time_in_force,
                 client_order_id=client_order_id
             )
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             return self._parse_order(await self.query_order(cl_ord_id=client_order_id))
             # return self._parse_order(order_data)
             # return order_data
